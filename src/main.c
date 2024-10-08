@@ -5,7 +5,7 @@
 
 
 // A_HIGH: PD2
-// B_HIGH: PD4
+// B_HIGH: PD1
 // C_HIGH: PD7
 
 // A_LOW: PD3
@@ -13,7 +13,7 @@
 // C_LOW: PD6
 
 #define A_H 2
-#define B_H 4
+#define B_H 1
 #define C_H 7
 
 #define A_L 3
@@ -22,10 +22,9 @@
 
 
 
-volatile uint32_t millis = 0;
+volatile uint32_t ticks = 0;
 volatile uint8_t step = 1;
-volatile uint8_t speed_div = 32;
-uint8_t target_speed_div = 4;
+volatile uint8_t speed_div = 20;
 
 
 void step_1() {
@@ -59,9 +58,9 @@ void step_6() {
 }
 
 
-ISR (TIMER0_OVF_vect) {
-  millis++;
-  if (millis % speed_div == 0) {
+ISR (TIMER2_OVF_vect) {
+  ticks++;
+  if (ticks % speed_div == 0) {
     step++;
     if (step == 7) step = 1;
   }
@@ -70,20 +69,12 @@ ISR (TIMER0_OVF_vect) {
 
 int main(void) {
   cli();
-  TCCR0B |= 0b00000011;
-  TIMSK0 |= 0b00000001;
+  TCCR2B |= 0b00000010;
+  TIMSK2 |= 0b00000001;
   sei();
 
   uint8_t last_step;
-  uint32_t last_millis = 0;
-
   while(1)  {
-    if (millis - last_millis > 100) {
-      last_millis = millis;
-      if (speed_div != target_speed_div) speed_div--;
-    }
-
-
     if (last_step != step) {
       last_step = step;
       switch (step) {
