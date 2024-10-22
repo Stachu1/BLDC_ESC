@@ -13,7 +13,7 @@
 // C_LOW: PD6
 
 #define A_H 2
-#define B_H 1
+#define B_H 4
 #define C_H 7
 
 #define A_L 3
@@ -28,37 +28,37 @@ volatile uint8_t speed_div = 20;
 
 
 void step_1() {
-  DDRD = (1 << B_H) | (1 << A_L);
-  PORTD = (1 << A_L);
+  PORTD = (1 << B_H) | (1 << A_L);
+  // PORTD = (1 << A_L);
 }
 
 void step_2() {
-  DDRD = (1 << B_H) | (1 << C_L);
-  PORTD = (1 << C_L);
+  PORTD = (1 << B_H) | (1 << C_L);
+  // PORTD = (1 << C_L);
 }
 
 void step_3() {
-  DDRD = (1 << A_H) | (1 << C_L);
-  PORTD = (1 << C_L);
+  PORTD = (1 << A_H) | (1 << C_L);
+  // PORTD = (1 << C_L);
 }
 
 void step_4() {
-  DDRD = (1 << A_H) | (1 << B_L);
-  PORTD = (1 << B_L);
+  PORTD = (1 << A_H) | (1 << B_L);
+  // PORTD = (1 << B_L);
 }
 
 void step_5() {
-  DDRD = (1 << C_H) | (1 << B_L);
-  PORTD = (1 << B_L);
+  PORTD = (1 << C_H) | (1 << B_L);
+  // PORTD = (1 << B_L);
 }
 
 void step_6() {
-  DDRD = (1 << C_H) | (1 << A_L);
-  PORTD = (1 << A_L);
+  PORTD = (1 << C_H) | (1 << A_L);
+  // PORTD = (1 << A_L);
 }
 
 
-ISR (TIMER2_OVF_vect) {
+ISR (TIMER1_COMPA_vect) {
   ticks++;
   if (ticks % speed_div == 0) {
     step++;
@@ -69,9 +69,13 @@ ISR (TIMER2_OVF_vect) {
 
 int main(void) {
   cli();
-  TCCR2B |= 0b00000010;
-  TIMSK2 |= 0b00000001;
+  TCCR1B |= (1 << WGM12);
+  OCR1A = 255;
+  TIMSK1 |= (1 << OCIE1A);
+  TCCR1B |= (1 << CS11);
   sei();
+
+  DDRD = 0xFF;
 
   uint8_t last_step;
   while(1)  {
