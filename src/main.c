@@ -24,7 +24,9 @@
 
 volatile uint32_t ticks = 0;
 volatile uint8_t step = 1;
-volatile uint8_t speed_div = 20;
+volatile uint8_t step_ticks = 20;
+volatile uint8_t power_on_ticks = 10;
+volatile float duty_cycle = 0.3;
 
 
 void step_1() {
@@ -60,22 +62,56 @@ void step_6() {
 
 ISR (TIMER1_COMPA_vect) {
   ticks++;
-  if (ticks % speed_div == 0) {
+  if (ticks % step_ticks == 0) {
     step++;
     if (step == 7) step = 1;
   }
+  if (ticks % power_on_ticks == 0) {
+    PORTD = 0x00;
+  }
+}
+
+
+uint16_t ADC_read(uint8_t channel) {
+    // Select the ADC channel (0 to 7)
+    ADMUX = (ADMUX & 0xF8) | (channel & 0x07);
+    
+    // Start the ADC conversion
+    ADCSRA |= (1 << ADSC);
+    
+    // Wait for the conversion to complete
+    while (ADCSRA & (1 << ADSC));
+    
+    // Return the ADC result
+    return ADC;
+}
+
+void set_div() {
+  uint16_t val = ADC_read(0);
+  step_ticks = (uint8_t)(val / 10 + 1);
+  power_on_ticks = (uint8_t)(step_ticks*duty_cycle);
 }
 
 
 int main(void) {
   cli();
   TCCR1B |= (1 << WGM12);
-  OCR1A = 255;
+  OCR1A = 200;
   TIMSK1 |= (1 << OCIE1A);
   TCCR1B |= (1 << CS11);
   sei();
 
   DDRD = 0xFF;
+
+  // Set the reference voltage to AVcc with external capacitor at AREF pin
+  ADMUX |= (1 << REFS0);
+  
+  // Set the ADC prescaler to 128 for 16 MHz clock (to get 125 kHz ADC clock)
+  ADCSRA |= (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
+  
+  // Enable the ADC
+  ADCSRA |= (1 << ADEN);
+
 
   uint8_t last_step;
   while(1)  {
@@ -84,6 +120,7 @@ int main(void) {
       switch (step) {
       case 1:
         step_1();
+        set_div();
         break;
       case 2:
         step_2();
