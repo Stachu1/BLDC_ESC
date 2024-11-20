@@ -7,6 +7,7 @@
 
 #define MIN_TARGET 40
 #define START_DUTY_CYCLE 100
+#define DEBOUNCE 10
 
 // Define inverter pins
 #define AH PD5
@@ -73,7 +74,8 @@ int main(void) {
   TIMSK0 |= (1 << OCIE0A);                  // Enable Timer0 compare interrupt
   
   // Analog comparator setting
-  ACSR = (1 << ACI);                        // Disable and clear (flag bit) analog comparator interrupt
+  ACSR &= ~(1 << ACIE);                     // Disable the Analog Comparator interrupt
+  ACSR |= (1 << ACI);                       // Clear the Analog Comparator interrupt flag
   sei();                                    // Enable global interrupts
 
   while(1) {
@@ -118,11 +120,11 @@ ISR(TIMER0_COMPA_vect) {
 
 // Analog comparator ISR
 ISR (ANALOG_COMP_vect) {
-  for (int i = 0; i < 10; i++) {            // BEMF debounce
+  for (int8_t i = 0; i < DEBOUNCE; i++) {            // BEMF debounce
     if (step & 1) {
-      if (!(ACSR & 0x20)) i -= 1;
+      if (!(ACSR & (1 << ACO))) i -= 1;
     } else {
-      if ((ACSR & 0x20))  i -= 1;
+      if ((ACSR & (1 << ACO)))  i -= 1;
     }
   }
   bldc_move();
