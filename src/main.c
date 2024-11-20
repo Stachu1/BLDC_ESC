@@ -146,28 +146,30 @@ ISR (ANALOG_COMP_vect) {
 }
 
 
+// Read the target speed from the UART and update rps_target
 int8_t update_speed_target(void) {
-  static char buff[6];                      // buff to hold the incoming string (max 5 digits + null terminator)
+  static char buff[6];                    // Buffer to hold the incoming string (max 5 digits + null terminator)
   static uint8_t index = 0;
 
-  if (UCSR0A & (1 << RXC0)) {               // Check if data is available in the UART buff
+  if (UCSR0A & (1 << RXC0)) {             // Check if data is available in the UART buffer
     char c = uart_getchar(NULL);
     if (c == '\n') {
-      buff[index] = '\0';                   // Null-terminate the string
-      rps_target = (uint16_t)atoi(buff);    // Convert string to uint16_t
+      buff[index] = '\0';                 // Null-terminate the string
+      rps_target = (uint16_t)atoi(buff);  // Convert string to uint16_t
       if (rps_target < MIN_TARGET) rps_target = MIN_TARGET;
-      index = 0;                            // Reset buff index
-      return 1;
+      index = 0;                          // Reset buff index
+      return 1;                           // rps_target updated
     } else if (index < sizeof(buff) - 1) {
-      buff[index] = c;                      // Add character to buff
-      index++;                              // Increment buff index
+      buff[index] = c;                    // Add character to buff
+      index++;                            // Increment buff index
     }
   }
-  return 0;
+  return 0;                               // rps_target not updated
 }
 
 
-void bldc_move(void) {        // BLDC motor commutation function
+// BLDC motor commutation function
+void bldc_move(void) {        
   switch (step) {
     case 0: AH_BL(); BEMF_C_RISING(); break;
     case 1: AH_CL(); BEMF_B_FALLING(); break;
@@ -179,6 +181,7 @@ void bldc_move(void) {        // BLDC motor commutation function
 }
 
 
+// PID controller to update the duty cycle
 void update_duty_cycle(void) {
   static float previous_error = 0;
 
@@ -196,111 +199,113 @@ void update_duty_cycle(void) {
 }
 
 
+// Start the motor in open loop
 void start(void) {
-  ACSR &= ~(1 << ACIE);           // Disable analog comparator interrupt
-  duty_cycle = START_DUTY_CYCLE;  // Set the duty cycle
-  set_pwm(duty_cycle);       // Start with a more moderate PWM
+  ACSR &= ~(1 << ACIE);                   // Disable analog comparator interrupt
+  duty_cycle = START_DUTY_CYCLE;
+  set_pwm(duty_cycle);                    // Set the duty cycle
 
   uint16_t delay_us = 5000;
   while (delay_us > 100) {
     uint16_t i = delay_us;
     while(i--) _delay_us(1);
     bldc_move();
-    step++;                 // Move to the next step
-    step %= 6;              // Wrap around if necessary
-    i -= 20;                // More gradual reduction in delay
+    step++;                               // Move to the next step
+    step %= 6;
+    i -= 20;                              // Reduce the delay
   }
-  ACSR |= (1 << ACIE);            // Enable analog comparator interrupt
-  rps_target = MIN_TARGET;        // Set the target speed
+  ACSR |= (1 << ACIE);                    // Enable analog comparator interrupt
+  rps_target = MIN_TARGET;                // Set the target speed
 }
 
 
+// Stop the motor by setting the 3-half bridge pins as inputs
 void stop(void) {
-  ACSR &= ~(1 << ACIE);           // Disable analog comparator interrupt
+  ACSR &= ~(1 << ACIE);                   // Disable analog comparator interrupt
   // Set 3-half bridge pins as inputs
   DDRB &= ~((1 << AL) | (1 << BL) | (1 << CL));
   DDRB &= ~((1 << AH) | (1 << BH) | (1 << CH));
 }
 
 void BEMF_A_RISING(void) {
-  ADCSRB = (0 << ACME);    // Select AIN1 as comparator negative input
-  ACSR |= (1 << ACIS1) | (1 << ACIS0);  // Set interrupt on rising edge
+  ADCSRB = (0 << ACME);                   // Select AIN1 as comparator negative input
+  ACSR |= (1 << ACIS1) | (1 << ACIS0);    // Set interrupt on rising edge
 }
 
 void BEMF_A_FALLING(void) {
-  ADCSRB = (0 << ACME);    // Select AIN1 as comparator negative input
+  ADCSRB = (0 << ACME);                   // Select AIN1 as comparator negative input
   ACSR = (ACSR & ~(1 << ACIS0)) | (1 << ACIS1);  // Set interrupt on falling edge
 }
 
 void BEMF_B_RISING(void) {
-  ADCSRA = (0 << ADEN);   // Disable the ADC module
+  ADCSRA = (0 << ADEN);                   // Disable the ADC module
   ADCSRB = (1 << ACME);
-  ADMUX = 2;              // Select analog channel 2 as comparator negative input
-  ACSR |= (1 << ACIS1) | (1 << ACIS0);  // Set interrupt on rising edge
+  ADMUX = 2;                              // Select analog channel 2 as comparator negative input
+  ACSR |= (1 << ACIS1) | (1 << ACIS0);    // Set interrupt on rising edge
 }
 
 void BEMF_B_FALLING(void) {
-  ADCSRA = (0 << ADEN);   // Disable the ADC module
+  ADCSRA = (0 << ADEN);                   // Disable the ADC module
   ADCSRB = (1 << ACME);
-  ADMUX = 2;              // Select analog channel 2 as comparator negative input
-  ACSR = (ACSR & ~(1 << ACIS0)) | (1 << ACIS1);  // Set interrupt on falling edge
+  ADMUX = 2;                              // Select analog channel 2 as comparator negative input
+  ACSR = (ACSR & ~(1 << ACIS0)) | (1 << ACIS1);   // Set interrupt on falling edge
 }
 
 void BEMF_C_RISING(void) {
-  ADCSRA = (0 << ADEN);   // Disable the ADC module
+  ADCSRA = (0 << ADEN);                   // Disable the ADC module
   ADCSRB = (1 << ACME);
-  ADMUX = 3;              // Select analog channel 3 as comparator negative input
-  ACSR |= (1 << ACIS1) | (1 << ACIS0);  // Set interrupt on rising edge
+  ADMUX = 3;                              // Select analog channel 3 as comparator negative input
+  ACSR |= (1 << ACIS1) | (1 << ACIS0);    // Set interrupt on rising edge
 }
 
 void BEMF_C_FALLING(void) {
-  ADCSRA = (0 << ADEN);   // Disable the ADC module
+  ADCSRA = (0 << ADEN);                   // Disable the ADC module
   ADCSRB = (1 << ACME);
-  ADMUX = 3;              // Select analog channel 3 as comparator negative input
-  ACSR = (ACSR & ~(1 << ACIS0)) | (1 << ACIS1);  // Set interrupt on falling edge
+  ADMUX = 3;                              // Select analog channel 3 as comparator negative input
+  ACSR = (ACSR & ~(1 << ACIS0)) | (1 << ACIS1);   // Set interrupt on falling edge
 }
 
 
 void AH_BL(void) {
-  PORTD &= ~(1 << AL | 1 << BL); // Clear bits AL and BL
-  PORTD |=  (1 << BL);           // Set bit BL
-  TCCR1A =  0;                   // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
-  TCCR2A =  (1 << WGM20 | 1 << COM2A1); // Set PWM settings for TCCR2A
+  PORTD &= ~(1 << AL | 1 << BL);          // Clear bits AL and BL
+  PORTD |=  (1 << BL);                    // Set bit BL
+  TCCR1A =  0;                            // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
+  TCCR2A =  (1 << WGM20 | 1 << COM2A1);   // Set PWM settings for TCCR2A
 }
 
 void AH_CL(void) {
-  PORTD &= ~(1 << BL | 1 << AL); // Clear bits BL and AL
-  PORTD |=  (1 << CL);           // Set bit CL
-  TCCR1A =  0;                   // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
-  TCCR2A =  (1 << WGM20 | 1 << COM2A1); // Set PWM settings for TCCR2A
+  PORTD &= ~(1 << BL | 1 << AL);          // Clear bits BL and AL
+  PORTD |=  (1 << CL);                    // Set bit CL
+  TCCR1A =  0;                            // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
+  TCCR2A =  (1 << WGM20 | 1 << COM2A1);   // Set PWM settings for TCCR2A
 }
 
 void BH_CL(void) {
-  PORTD &= ~(1 << BL | 1 << AL); // Clear bits BL and AL
-  PORTD |=  (1 << CL);           // Set bit CL
-  TCCR2A =  0;                   // Turn pin 10 (OC1B) PWM ON (pin 9 & pin 11 OFF)
-  TCCR1A =  (1 << WGM10 | 1 << COM1B1); // Set PWM settings for TCCR1A
+  PORTD &= ~(1 << BL | 1 << AL);          // Clear bits BL and AL
+  PORTD |=  (1 << CL);                    // Set bit CL
+  TCCR2A =  0;                            // Turn pin 10 (OC1B) PWM ON (pin 9 & pin 11 OFF)
+  TCCR1A =  (1 << WGM10 | 1 << COM1B1);   // Set PWM settings for TCCR1A
 }
 
 void BH_AL(void) {
-  PORTD &= ~(1 << CL | 1 << BL); // Clear bits CL and BL
-  PORTD |=  (1 << AL);           // Set bit AL
-  TCCR2A =  0;                   // Turn pin 10 (OC1B) PWM ON (pin 9 & pin 11 OFF)
-  TCCR1A =  (1 << WGM10 | 1 << COM1B1); // Set PWM settings for TCCR1A
+  PORTD &= ~(1 << CL | 1 << BL);          // Clear bits CL and BL
+  PORTD |=  (1 << AL);                    // Set bit AL
+  TCCR2A =  0;                            // Turn pin 10 (OC1B) PWM ON (pin 9 & pin 11 OFF)
+  TCCR1A =  (1 << WGM10 | 1 << COM1B1);   // Set PWM settings for TCCR1A
 }
 
 void CH_AL(void) {
-  PORTD &= ~(1 << CL | 1 << BL); // Clear bits CL and BL
-  PORTD |=  (1 << AL);           // Set bit AL
-  TCCR2A =  0;                   // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
-  TCCR1A =  (1 << WGM10 | 1 << COM1A1); // Set PWM settings for TCCR1A
+  PORTD &= ~(1 << CL | 1 << BL);          // Clear bits CL and BL
+  PORTD |=  (1 << AL);                    // Set bit AL
+  TCCR2A =  0;                            // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
+  TCCR1A =  (1 << WGM10 | 1 << COM1A1);   // Set PWM settings for TCCR1A
 }
 
 void CH_BL(void) {
-  PORTD &= ~(1 << AL | 1 << BL); // Clear bits AL and BL
-  PORTD |=  (1 << BL);           // Set bit BL
-  TCCR2A =  0;                   // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
-  TCCR1A =  (1 << WGM10 | 1 << COM1A1); // Set PWM settings for TCCR1A
+  PORTD &= ~(1 << AL | 1 << BL);          // Clear bits AL and BL
+  PORTD |=  (1 << BL);                    // Set bit BL
+  TCCR2A =  0;                            // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
+  TCCR1A =  (1 << WGM10 | 1 << COM1A1);   // Set PWM settings for TCCR1A
 }
 
 
