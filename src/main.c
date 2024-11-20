@@ -8,6 +8,7 @@
 #define MIN_TARGET 40
 #define START_DUTY_CYCLE 100
 #define DEBOUNCE 10
+#define MAX_DELTA_RPS 100
 
 // Define inverter pins
 #define AH PD5
@@ -102,7 +103,7 @@ int main(void) {
       }
     }
 
-    if (delta_rps > 100) {
+    if (delta_rps > MAX_DELTA_RPS) {
       start();
       spinning = 1;
       millis_count = 0;
@@ -205,7 +206,7 @@ void start(void) {
 
 void stop(void) {
   ACSR &= ~(1 << ACIE);           // Disable analog comparator interrupt
-  // Set inverter pins as outputs
+  // Set inverter pins as inputs
   DDRB &= ~((1 << AL) | (1 << BL) | (1 << CL));
   DDRB &= ~((1 << AH) | (1 << BH) | (1 << CH));
 }
