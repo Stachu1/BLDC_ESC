@@ -214,7 +214,7 @@ void start(void) {
     bldc_move();
     step++;                               // Move to the next step
     step %= 6;
-    i -= 20;                              // Reduce the delay
+    delay_us -= 20;                       // Reduce the delay
   }
   ACSR |= (1 << ACIE);                    // Enable analog comparator interrupt
   rps_target = MIN_TARGET;                // Set the target speed
@@ -224,6 +224,7 @@ void start(void) {
 // Stop the motor by setting the 3-half bridge pins as inputs
 void stop(void) {
   ACSR &= ~(1 << ACIE);                   // Disable analog comparator interrupt
+
   // Set 3-half bridge pins as inputs
   DDRB &= ~((1 << AL) | (1 << BL) | (1 << CL));
   DDRB &= ~((1 << AH) | (1 << BH) | (1 << CH));
