@@ -10,7 +10,7 @@
 #define DEBOUNCE 10
 #define MAX_DELTA_RPS 100
 
-// Define inverter pins
+// Define 3-half bridge pins
 #define AH PD5
 #define BH PD4
 #define CH PD3
@@ -56,7 +56,7 @@ int main(void) {
   uart_init();
   io_redirect();
 
-  // Set inverter pins as outputs
+  // Set 3-half bridge pins as outputs
   DDRB |= (1 << AL) | (1 << BL) | (1 << CL);
   DDRB |= (1 << AH) | (1 << BH) | (1 << CH);
 
@@ -80,34 +80,44 @@ int main(void) {
   sei();                                    // Enable global interrupts
 
   while(1) {
+
+    // Update the target speed
     if (update_speed_target()) {
+
+      // Stop the motor if the target speed is 0
       if (spinning && rps_target == 0) {
         stop();
         spinning = 0;
       }
+
+      // Start the motor if the target speed is greater than 0
       else if (!spinning && rps_target > 0) {
         start();
         spinning = 1;
       }
     }
 
-    if (millis_count % 100 == 0) {    // 100ms interval
+    // Update RPS & delta_rps every 100ms
+    if (millis_count % 100 == 0) {
       delta_rps = rps;
       rps = (steps_count / 4.2);      // Calculate RPS
       delta_rps = rps - delta_rps;    // Calculate delta RPS
       steps_count = 0;
 
+      // Update duty cycle to reach the target speed
       if (spinning) {
         update_duty_cycle();
         set_pwm(duty_cycle);
       }
     }
 
+    // If detect a suddent increase in RPS, restart the motor
     if (delta_rps > MAX_DELTA_RPS) {
       start();
       spinning = 1;
       millis_count = 0;
       steps_count = 0;
+      delta_rps = 0;
     }
   }
 }
@@ -121,7 +131,8 @@ ISR(TIMER0_COMPA_vect) {
 
 // Analog comparator ISR
 ISR (ANALOG_COMP_vect) {
-  for (int8_t i = 0; i < DEBOUNCE; i++) {            // BEMF debounce
+  // BEMF debounce
+  for (int8_t i = 0; i < DEBOUNCE; i++) {
     if (step & 1) {
       if (!(ACSR & (1 << ACO))) i -= 1;
     } else {
@@ -206,7 +217,7 @@ void start(void) {
 
 void stop(void) {
   ACSR &= ~(1 << ACIE);           // Disable analog comparator interrupt
-  // Set inverter pins as inputs
+  // Set 3-half bridge pins as inputs
   DDRB &= ~((1 << AL) | (1 << BL) | (1 << CL));
   DDRB &= ~((1 << AH) | (1 << BH) | (1 << CH));
 }
