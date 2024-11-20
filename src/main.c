@@ -5,7 +5,7 @@
 #include <util/delay.h>
 #include "usart.h"
 
-#define MIN_SPEED_TARGET 40
+#define MIN_TARGET 40
 #define START_DUTY_CYCLE 100
 
 // Define inverter pins
@@ -17,14 +17,38 @@
 #define BL PB2
 #define CL PB1
 
+#define Kp 0.2f   // Proportional gain as a float macro
+#define Kd 0.5f   // Derivative gain as a float macro
 
 volatile uint8_t step = 0;
 volatile uint16_t steps_count = 0;
-volatile uint16_t millis_count = 0;
-volatile float rps = 0;
-volatile uint16_t rps_target = 0;
+volatile uint64_t millis_count = 0;
+float duty_cycle = 0;
+float rps = 0;
+float delta_rps = 0;
+uint16_t rps_target = 0;
+int8_t spinning = 0;
 
-void update_speed_target(void);
+int8_t update_speed_target(void);
+void bldc_move(void);
+void update_duty_cycle(void);
+void start(void);
+void stop(void);
+
+void BEMF_A_RISING(void);
+void BEMF_A_FALLING(void);
+void BEMF_B_RISING(void);
+void BEMF_B_FALLING(void);
+void BEMF_C_RISING(void);
+void BEMF_C_FALLING(void);
+void AH_BL(void);
+void AH_CL(void);
+void BH_CL(void);
+void BH_AL(void);
+void CH_AL(void);
+void CH_BL(void);
+
+void set_pwm(float duty);
 
 int main(void) {
   uart_init();
@@ -50,29 +74,37 @@ int main(void) {
   
   // Analog comparator setting
   ACSR = (1 << ACI);                        // Disable and clear (flag bit) analog comparator interrupt
-  sei();
+  sei();                                    // Enable global interrupts
 
   while(1) {
-    update_speed_target();
-    printf("Current target speed: %u\n", rps_target);
-    _delay_ms(500);
-  }
-}
+    if (update_speed_target()) {
+      if (spinning && rps_target == 0) {
+        stop();
+        spinning = 0;
+      }
+      else if (!spinning && rps_target > 0) {
+        start();
+        spinning = 1;
+      }
+    }
 
+    if (millis_count % 100 == 0) {    // 100ms interval
+      delta_rps = rps;
+      rps = (steps_count / 4.2);      // Calculate RPS
+      delta_rps = rps - delta_rps;    // Calculate delta RPS
+      steps_count = 0;
 
-void update_speed_target(void) {
-  static char buff[6];                      // buff to hold the incoming string (max 5 digits + null terminator)
-  static uint8_t index = 0;
+      if (spinning) {
+        update_duty_cycle();
+        set_pwm(duty_cycle);
+      }
+    }
 
-  if (UCSR0A & (1 << RXC0)) {               // Check if data is available in the UART buff
-    char c = uart_getchar(NULL);
-    if (c == '\n') {
-      buff[index] = '\0';                   // Null-terminate the string
-      rps_target = (uint16_t)atoi(buff);    // Convert string to uint16_t
-      index = 0;                            // Reset buff index
-    } else if (index < sizeof(buff) - 1) {
-      buff[index] = c;                      // Add character to buff
-      index++;                              // Increment buff index
+    if (delta_rps > 100) {
+      start();
+      spinning = 1;
+      millis_count = 0;
+      steps_count = 0;
     }
   }
 }
@@ -100,7 +132,28 @@ ISR (ANALOG_COMP_vect) {
 }
 
 
-void bldc_move() {        // BLDC motor commutation function
+int8_t update_speed_target(void) {
+  static char buff[6];                      // buff to hold the incoming string (max 5 digits + null terminator)
+  static uint8_t index = 0;
+
+  if (UCSR0A & (1 << RXC0)) {               // Check if data is available in the UART buff
+    char c = uart_getchar(NULL);
+    if (c == '\n') {
+      buff[index] = '\0';                   // Null-terminate the string
+      rps_target = (uint16_t)atoi(buff);    // Convert string to uint16_t
+      if (rps_target < MIN_TARGET) rps_target = MIN_TARGET;
+      index = 0;                            // Reset buff index
+      return 1;
+    } else if (index < sizeof(buff) - 1) {
+      buff[index] = c;                      // Add character to buff
+      index++;                              // Increment buff index
+    }
+  }
+  return 0;
+}
+
+
+void bldc_move(void) {        // BLDC motor commutation function
   switch (step) {
     case 0: AH_BL(); BEMF_C_RISING(); break;
     case 1: AH_CL(); BEMF_B_FALLING(); break;
@@ -112,13 +165,10 @@ void bldc_move() {        // BLDC motor commutation function
 }
 
 
-void update_duty_cycle(float *duty_cycle, uint16_t rps_target, uint16_t rps) {
-  float Kp = 0.2;  // Proportional gain
-  float Kd = 0.5; // Derivative gain
-
+void update_duty_cycle(void) {
   static float previous_error = 0;
 
-  float error = (float)rps_target - (float)rps;
+  float error = (float)rps_target - rps;
 
   float Pout = Kp * error;
 
@@ -128,76 +178,68 @@ void update_duty_cycle(float *duty_cycle, uint16_t rps_target, uint16_t rps) {
   previous_error = error;
 
   float pid_output = Pout + Dout;
-  *duty_cycle += pid_output;
-
-  // Clamp duty cycle to valid range (e.g., 0% to 100%)
-  if (*duty_cycle > 255) *duty_cycle = 255;
-  if (*duty_cycle < 0) *duty_cycle = 0;
+  duty_cycle += pid_output;
 }
 
 
-void start() {
-  ACSR &= ~0x08;           // Disable analog comparator interrupt
-  DDRD |= 0x38;            // Configure pins 3, 4, and 5 as outputs
-  DDRB |= 0x0E;            // Configure pins 9, 10, and 11 as outputs
+void start(void) {
+  ACSR &= ~(1 << ACIE);           // Disable analog comparator interrupt
+  duty_cycle = START_DUTY_CYCLE;  // Set the duty cycle
+  set_pwm(duty_cycle);       // Start with a more moderate PWM
 
-  // Set an initial boost in PWM for extra torque during startup
-  // SET_PWM_DUTY(180);       // High duty cycle for a brief initial torque boost
-  // bldc_move();
-
-  // Now set starting PWM to ramp up smoothly
-  SET_PWM_DUTY(100);       // Start with a more moderate PWM
-
-  int i = 5000;
-  while (i > 100) {
-    delayMicroseconds(i);
+  uint16_t delay_us = 5000;
+  while (delay_us > 100) {
+    uint16_t i = delay_us;
+    while(i--) _delay_us(1);
     bldc_move();
-    step++;
-    step %= 6;
+    step++;                 // Move to the next step
+    step %= 6;              // Wrap around if necessary
     i -= 20;                // More gradual reduction in delay
   }
-  ACSR |= 0x08;            // Enable analog comparator interrupt
+  ACSR |= (1 << ACIE);            // Enable analog comparator interrupt
+  rps_target = MIN_TARGET;        // Set the target speed
 }
 
 
-void stop() {
-  ACSR &= ~0x08;           // Disable analog comparator interrupt
-  DDRD &= ~0x38;           // Configure pins 3, 4 and 5 as inputs
-  DDRB &= ~0x0E;           // Configure pins 9, 10 and 11 as inputs
+void stop(void) {
+  ACSR &= ~(1 << ACIE);           // Disable analog comparator interrupt
+  // Set inverter pins as outputs
+  DDRB &= ~((1 << AL) | (1 << BL) | (1 << CL));
+  DDRB &= ~((1 << AH) | (1 << BH) | (1 << CH));
 }
 
-void BEMF_A_RISING(){
+void BEMF_A_RISING(void) {
   ADCSRB = (0 << ACME);    // Select AIN1 as comparator negative input
   ACSR |= 0x03;            // Set interrupt on rising edge
 }
 
-void BEMF_A_FALLING(){
+void BEMF_A_FALLING(void) {
   ADCSRB = (0 << ACME);    // Select AIN1 as comparator negative input
   ACSR &= ~0x01;           // Set interrupt on falling edge
 }
 
-void BEMF_B_RISING(){
+void BEMF_B_RISING(void) {
   ADCSRA = (0 << ADEN);   // Disable the ADC module
   ADCSRB = (1 << ACME);
   ADMUX = 2;              // Select analog channel 2 as comparator negative input
   ACSR |= 0x03;
 }
 
-void BEMF_B_FALLING(){
+void BEMF_B_FALLING(void) {
   ADCSRA = (0 << ADEN);   // Disable the ADC module
   ADCSRB = (1 << ACME);
   ADMUX = 2;              // Select analog channel 2 as comparator negative input
   ACSR &= ~0x01;
 }
 
-void BEMF_C_RISING(){
+void BEMF_C_RISING(void) {
   ADCSRA = (0 << ADEN);   // Disable the ADC module
   ADCSRB = (1 << ACME);
   ADMUX = 3;              // Select analog channel 3 as comparator negative input
   ACSR |= 0x03;
 }
 
-void BEMF_C_FALLING(){
+void BEMF_C_FALLING(void) {
   ADCSRA = (0 << ADEN);   // Disable the ADC module
   ADCSRB = (1 << ACME);
   ADMUX = 3;              // Select analog channel 3 as comparator negative input
@@ -205,42 +247,42 @@ void BEMF_C_FALLING(){
 }
 
 
-void AH_BL() {
+void AH_BL(void) {
   PORTD &= ~(1 << AL | 1 << BL); // Clear bits AL and BL
   PORTD |=  (1 << BL);           // Set bit BL
   TCCR1A =  0;                   // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
   TCCR2A =  (1 << WGM20 | 1 << COM2A1); // Set PWM settings for TCCR2A
 }
 
-void AH_CL() {
+void AH_CL(void) {
   PORTD &= ~(1 << BL | 1 << AL); // Clear bits BL and AL
   PORTD |=  (1 << CL);           // Set bit CL
   TCCR1A =  0;                   // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
   TCCR2A =  (1 << WGM20 | 1 << COM2A1); // Set PWM settings for TCCR2A
 }
 
-void BH_CL() {
+void BH_CL(void) {
   PORTD &= ~(1 << BL | 1 << AL); // Clear bits BL and AL
   PORTD |=  (1 << CL);           // Set bit CL
   TCCR2A =  0;                   // Turn pin 10 (OC1B) PWM ON (pin 9 & pin 11 OFF)
   TCCR1A =  (1 << WGM10 | 1 << COM1B1); // Set PWM settings for TCCR1A
 }
 
-void BH_AL() {
+void BH_AL(void) {
   PORTD &= ~(1 << CL | 1 << BL); // Clear bits CL and BL
   PORTD |=  (1 << AL);           // Set bit AL
   TCCR2A =  0;                   // Turn pin 10 (OC1B) PWM ON (pin 9 & pin 11 OFF)
   TCCR1A =  (1 << WGM10 | 1 << COM1B1); // Set PWM settings for TCCR1A
 }
 
-void CH_AL() {
+void CH_AL(void) {
   PORTD &= ~(1 << CL | 1 << BL); // Clear bits CL and BL
   PORTD |=  (1 << AL);           // Set bit AL
   TCCR2A =  0;                   // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
   TCCR1A =  (1 << WGM10 | 1 << COM1A1); // Set PWM settings for TCCR1A
 }
 
-void CH_BL() {
+void CH_BL(void) {
   PORTD &= ~(1 << AL | 1 << BL); // Clear bits AL and BL
   PORTD |=  (1 << BL);           // Set bit BL
   TCCR2A =  0;                   // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
@@ -248,11 +290,11 @@ void CH_BL() {
 }
 
 
-void SET_PWM_DUTY(float duty){
+void set_pwm(float duty){
   if (duty > 255) duty = 255;
   if (duty < 0) duty = 0;
   duty += 0.5;
-  OCR1A  = (uint8_t)duty;                   // Set pin 9  PWM duty cycle
-  OCR1B  = (uint8_t)duty;                   // Set pin 10 PWM duty cycle
-  OCR2A  = (uint8_t)duty;                   // Set pin 11 PWM duty cycle
+  OCR1A = (uint8_t)duty;                   // Set pin 9  PWM duty cycle
+  OCR1B = (uint8_t)duty;                   // Set pin 10 PWM duty cycle
+  OCR2A = (uint8_t)duty;                   // Set pin 11 PWM duty cycle
 }
