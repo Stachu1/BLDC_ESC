@@ -5,7 +5,7 @@
 #include <util/delay.h>
 #include "usart.h"
 
-#define MIN_TARGET 40                     // Minimum target speed in RPS
+#define MIN_TARGET 80                     // Minimum target speed in RPS
 #define START_DUTY_CYCLE 100              // Duty cycle for open loop start
 #define DEBOUNCE 10                       // BEMF debounce count - default is 10 consecutive readings
 #define MAX_DELTA_RPS 100                 // Maximum acceptable delta RPS before restarting the motor
@@ -65,6 +65,10 @@ int main(void) {
   uart_init();
   io_redirect();
 
+  // Set 3-half bridge pins as outputs
+  DDRD = (1 << AH) | (1 << BH) | (1 << CH);
+  DDRB = (1 << AL) | (1 << BL) | (1 << CL);
+
   // Timer1: set clock source to clkI/O / 1 (no prescaling)
   TCCR1A = 0;
   TCCR1B = (1 << CS10);
@@ -121,7 +125,7 @@ int main(void) {
     }
 
     // // If detect a suddent increase in RPS, restart the motor
-    // if (delta_rps > MAX_DELTA_RPS) {
+    // if (delta_rps > MAX_DELTA_RPS && spinning) {
     //   start();
     //   millis_count = 0;
     //   steps_count = 0;
@@ -210,14 +214,10 @@ void update_duty_cycle(void) {
 void start(void) {
   ACSR &= ~(1 << ACIE);                   // Disable analog comparator interrupt
 
-  // Set 3-half bridge pins as outputs
-  DDRD = (1 << AH) | (1 << BH) | (1 << CH);
-  DDRB = (1 << AL) | (1 << BL) | (1 << CL);
-
   duty_cycle = START_DUTY_CYCLE;
   set_pwm(duty_cycle);                    // Set the duty cycle
 
-  uint16_t delay_us = 5000;
+  uint16_t delay_us = 10e3;
   while (delay_us > 100) {
     uint16_t i = delay_us;
     while(i--) _delay_us(1);
@@ -239,10 +239,6 @@ void stop(void) {
   // Set 3-half bridge pins to low
   PORTB &= ~((1 << AL) | (1 << BL) | (1 << CL));
   PORTD &= ~((1 << AH) | (1 << BH) | (1 << CH));
-
-  // Set 3-half bridge pins as inputs
-  DDRB &= ~((1 << AL) | (1 << BL) | (1 << CL));
-  DDRD &= ~((1 << AH) | (1 << BH) | (1 << CH));
 }
 
 
