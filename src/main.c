@@ -237,7 +237,7 @@ void stop(void) {
   DDRB &= ~((1 << AH) | (1 << BH) | (1 << CH));
 }
 
-
+// TODO: WTF is (0 << ACME) ???
 void BEMF_A_RISING(void) {
   ADCSRB = (0 << ACME);                   // Select AIN1 as comparator negative input
   ACSR |= (1 << ACIS1) | (1 << ACIS0);    // Set interrupt on rising edge
