@@ -237,41 +237,41 @@ void stop(void) {
   DDRB &= ~((1 << AH) | (1 << BH) | (1 << CH));
 }
 
-// TODO: WTF is (0 << ACME) ???
+
 void BEMF_A_RISING(void) {
-  ADCSRB = (0 << ACME);                   // Select AIN1 as comparator negative input
+  ADCSRB &= ~(1 << ACME);                 // Select AIN1 as comparator negative input
   ACSR |= (1 << ACIS1) | (1 << ACIS0);    // Set interrupt on rising edge
 }
 
 void BEMF_A_FALLING(void) {
-  ADCSRB = (0 << ACME);                   // Select AIN1 as comparator negative input
+  ADCSRB &= ~(1 << ACME);                 // Select AIN1 as comparator negative input
   ACSR = (ACSR & ~(1 << ACIS0)) | (1 << ACIS1);  // Set interrupt on falling edge
 }
 
 void BEMF_B_RISING(void) {
-  ADCSRA = (0 << ADEN);                   // Disable the ADC module
-  ADCSRB = (1 << ACME);
+  ADCSRA &= ~(1 << ADEN);                 // Disable the ADC module
+  ADCSRB |= (1 << ACME);
   ADMUX = BEMF_B;                         // Select analog channel BEMF_B as comparator negative input
   ACSR |= (1 << ACIS1) | (1 << ACIS0);    // Set interrupt on rising edge
 }
 
 void BEMF_B_FALLING(void) {
-  ADCSRA = (0 << ADEN);                   // Disable the ADC module
-  ADCSRB = (1 << ACME);
+  ADCSRA &= ~(1 << ADEN);                 // Disable the ADC module
+  ADCSRB |= (1 << ACME);
   ADMUX = BEMF_B;                         // Select analog channel BEMF_B as comparator negative input
   ACSR = (ACSR & ~(1 << ACIS0)) | (1 << ACIS1);   // Set interrupt on falling edge
 }
 
 void BEMF_C_RISING(void) {
-  ADCSRA = (0 << ADEN);                   // Disable the ADC module
-  ADCSRB = (1 << ACME);
+  ADCSRA &= ~(1 << ADEN);                 // Disable the ADC module
+  ADCSRB |= (1 << ACME);
   ADMUX = BEMF_C;                         // Select analog channel BEMF_C as comparator negative input
   ACSR |= (1 << ACIS1) | (1 << ACIS0);    // Set interrupt on rising edge
 }
 
 void BEMF_C_FALLING(void) {
-  ADCSRA = (0 << ADEN);                   // Disable the ADC module
-  ADCSRB = (1 << ACME);
+  ADCSRA &= ~(1 << ADEN);                 // Disable the ADC module
+  ADCSRB |= (1 << ACME);
   ADMUX = BEMF_C;                         // Select analog channel BEMF_C as comparator negative input
   ACSR = (ACSR & ~(1 << ACIS0)) | (1 << ACIS1);   // Set interrupt on falling edge
 }
