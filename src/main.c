@@ -5,7 +5,7 @@
 #include <util/delay.h>
 #include "usart.h"
 
-#define MIN_TARGET 80                     // Minimum target speed in RPS
+#define MIN_TARGET 60                     // Minimum target speed in RPS
 #define START_DUTY_CYCLE 100              // Duty cycle for open loop start
 #define DEBOUNCE 10                       // BEMF debounce count - default is 10 consecutive readings
 #define MAX_DELTA_RPS 100                 // Maximum acceptable delta RPS before restarting the motor
@@ -93,7 +93,7 @@ int main(void) {
     if (update_speed_target()) {
 
       // Stop the motor if the target speed is 0
-      if (spinning && rps_target == 0) {
+      if (rps_target == 0) {
         stop();
         spinning = 0;
       }
@@ -101,12 +101,7 @@ int main(void) {
       // Start the motor if the target speed is greater than 0
       else if (!spinning && rps_target > 0) {
         start();
-        // stop();
-        // set_pwm(0);
         spinning = 1;
-
-        // start();
-        // spinning = 1;
       }
     }
 
@@ -117,20 +112,23 @@ int main(void) {
       delta_rps = rps - delta_rps;        // Calculate delta RPS
       steps_count = 0;
 
-      // // Update duty cycle to reach the target speed
-      // if (spinning) {
-      //   update_duty_cycle();
-      //   set_pwm(duty_cycle);
-      // }
+      if (spinning) printf("%.2f\n", rps);
+
+
+      // Update duty cycle to reach the target speed
+      if (spinning) {
+        update_duty_cycle();
+        set_pwm(duty_cycle);
+      }
     }
 
-    // // If detect a suddent increase in RPS, restart the motor
-    // if (delta_rps > MAX_DELTA_RPS && spinning) {
-    //   start();
-    //   millis_count = 0;
-    //   steps_count = 0;
-    //   delta_rps = 0;
-    // }
+    // If detect a suddent increase in RPS, restart the motor
+    if (delta_rps > MAX_DELTA_RPS && spinning) {
+      start();
+      millis_count = 0;
+      steps_count = 0;
+      delta_rps = 0;
+    }
   }
 }
 
