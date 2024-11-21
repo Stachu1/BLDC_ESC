@@ -141,18 +141,27 @@ ISR(TIMER0_COMPA_vect) {
 
 // Analog comparator ISR
 ISR (ANALOG_COMP_vect) {
-  // BEMF debounce
+  // Debounce the BEMF signal
+  uint8_t move = 1;
   for (int8_t i = 0; i < DEBOUNCE; i++) {
     if (step & 1) {
-      if (!(ACSR & (1 << ACO))) i -= 1;
+      if (!(ACSR & (1 << ACO))) {
+        move = 0;
+        break;
+      };
     } else {
-      if ((ACSR & (1 << ACO)))  i -= 1;
+      if ((ACSR & (1 << ACO)))  {
+        move = 0;
+        break;
+      };
     }
   }
-  bldc_move();
-  step++;
-  step %= 6;
-  steps_count++;
+  if (move) {
+    bldc_move();
+    step++;
+    step %= 6;
+    steps_count++;
+  }
 }
 
 
