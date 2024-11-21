@@ -12,8 +12,8 @@
 
 // 3-half bridge high side pins
 #define AH PD5
-#define BH PD4
-#define CH PD3
+#define BH PD3
+#define CH PD2
 
 // 3-half bridge low side pins
 #define AL PB3
@@ -65,10 +65,6 @@ int main(void) {
   uart_init();
   io_redirect();
 
-  // Set 3-half bridge pins as outputs
-  DDRB |= (1 << AL) | (1 << BL) | (1 << CL);
-  DDRB |= (1 << AH) | (1 << BH) | (1 << CH);
-
   // Timer1: set clock source to clkI/O / 1 (no prescaling)
   TCCR1A = 0;
   TCCR1B = (1 << CS10);
@@ -89,7 +85,6 @@ int main(void) {
   sei();                                  // Enable global interrupts
 
   while(1) {
-
     // Update the target speed
     if (update_speed_target()) {
 
@@ -102,7 +97,12 @@ int main(void) {
       // Start the motor if the target speed is greater than 0
       else if (!spinning && rps_target > 0) {
         start();
+        // stop();
+        // set_pwm(0);
         spinning = 1;
+
+        // start();
+        // spinning = 1;
       }
     }
 
@@ -113,21 +113,20 @@ int main(void) {
       delta_rps = rps - delta_rps;        // Calculate delta RPS
       steps_count = 0;
 
-      // Update duty cycle to reach the target speed
-      if (spinning) {
-        update_duty_cycle();
-        set_pwm(duty_cycle);
-      }
+      // // Update duty cycle to reach the target speed
+      // if (spinning) {
+      //   update_duty_cycle();
+      //   set_pwm(duty_cycle);
+      // }
     }
 
-    // If detect a suddent increase in RPS, restart the motor
-    if (delta_rps > MAX_DELTA_RPS) {
-      start();
-      spinning = 1;
-      millis_count = 0;
-      steps_count = 0;
-      delta_rps = 0;
-    }
+    // // If detect a suddent increase in RPS, restart the motor
+    // if (delta_rps > MAX_DELTA_RPS) {
+    //   start();
+    //   millis_count = 0;
+    //   steps_count = 0;
+    //   delta_rps = 0;
+    // }
   }
 }
 
@@ -157,7 +156,7 @@ ISR (ANALOG_COMP_vect) {
 
 // Read the target speed from the UART and update rps_target
 int8_t update_speed_target(void) {
-  static char buff[6];                    // Buffer to hold the incoming string (max 5 digits + null terminator)
+  static char buff[4];                    // Buffer to hold the incoming string (max 3 digits + null terminator)
   static uint8_t index = 0;
 
   if (UCSR0A & (1 << RXC0)) {             // Check if data is available in the UART buffer
@@ -165,7 +164,6 @@ int8_t update_speed_target(void) {
     if (c == '\n') {
       buff[index] = '\0';                 // Null-terminate the string
       rps_target = (uint16_t)atoi(buff);  // Convert string to uint16_t
-      if (rps_target < MIN_TARGET) rps_target = MIN_TARGET;
       index = 0;                          // Reset buff index
       return 1;                           // rps_target updated
     } else if (index < sizeof(buff) - 1) {
@@ -211,6 +209,11 @@ void update_duty_cycle(void) {
 // Start the motor in open loop
 void start(void) {
   ACSR &= ~(1 << ACIE);                   // Disable analog comparator interrupt
+
+  // Set 3-half bridge pins as outputs
+  DDRD = (1 << AH) | (1 << BH) | (1 << CH);
+  DDRB = (1 << AL) | (1 << BL) | (1 << CL);
+
   duty_cycle = START_DUTY_CYCLE;
   set_pwm(duty_cycle);                    // Set the duty cycle
 
@@ -230,11 +233,16 @@ void start(void) {
 
 // Stop the motor by setting the 3-half bridge pins as inputs
 void stop(void) {
+  set_pwm(0);
   ACSR &= ~(1 << ACIE);                   // Disable analog comparator interrupt
+
+  // Set 3-half bridge pins to low
+  PORTB &= ~((1 << AL) | (1 << BL) | (1 << CL));
+  PORTD &= ~((1 << AH) | (1 << BH) | (1 << CH));
 
   // Set 3-half bridge pins as inputs
   DDRB &= ~((1 << AL) | (1 << BL) | (1 << CL));
-  DDRB &= ~((1 << AH) | (1 << BH) | (1 << CH));
+  DDRD &= ~((1 << AH) | (1 << BH) | (1 << CH));
 }
 
 
@@ -278,45 +286,45 @@ void BEMF_C_FALLING(void) {
 
 
 void AH_BL(void) {
-  PORTD &= ~(1 << AL | 1 << BL);          // Clear bits AL and BL
-  PORTD |=  (1 << BL);                    // Set bit BL
-  TCCR1A =  0;                            // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
-  TCCR2A =  (1 << WGM20 | 1 << COM2A1);   // Set PWM settings for TCCR2A
+  PORTD &= ~((1 << BH) | (1 << CH));      // Set BH CH to low
+  PORTD |= (1 << AH);                     // Set AH to high
+  TCCR2A =  0;                            // Turn pin 10 (OC1B) PWM ON (pin 9 & pin 11 OFF)
+  TCCR1A =  0x21;
 }
 
 void AH_CL(void) {
-  PORTD &= ~(1 << BL | 1 << AL);          // Clear bits BL and AL
-  PORTD |=  (1 << CL);                    // Set bit CL
-  TCCR1A =  0;                            // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
-  TCCR2A =  (1 << WGM20 | 1 << COM2A1);   // Set PWM settings for TCCR2A
+  PORTD &= ~((1 << BH) | (1 << CH));      // Set BH CH to low
+  PORTD |= (1 << AH);                     // Set AH to high
+  TCCR2A =  0;                            // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
+  TCCR1A =  0x81;
 }
 
 void BH_CL(void) {
-  PORTD &= ~(1 << BL | 1 << AL);          // Clear bits BL and AL
-  PORTD |=  (1 << CL);                    // Set bit CL
-  TCCR2A =  0;                            // Turn pin 10 (OC1B) PWM ON (pin 9 & pin 11 OFF)
-  TCCR1A =  (1 << WGM10 | 1 << COM1B1);   // Set PWM settings for TCCR1A
+  PORTD &= ~((1 << AH) | (1 << CH));      // Set AH CH to low
+  PORTD |= (1 << BH);                     // Set BH to high
+  TCCR2A =  0;                            // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
+  TCCR1A =  0x81;
 }
 
 void BH_AL(void) {
-  PORTD &= ~(1 << CL | 1 << BL);          // Clear bits CL and BL
-  PORTD |=  (1 << AL);                    // Set bit AL
-  TCCR2A =  0;                            // Turn pin 10 (OC1B) PWM ON (pin 9 & pin 11 OFF)
-  TCCR1A =  (1 << WGM10 | 1 << COM1B1);   // Set PWM settings for TCCR1A
+  PORTD &= ~((1 << AH) | (1 << CH));      // Set AH CH to low
+  PORTD |= (1 << BH);                     // Set BH to high
+  TCCR1A =  0;                            // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
+  TCCR2A =  0x81;
 }
 
 void CH_AL(void) {
-  PORTD &= ~(1 << CL | 1 << BL);          // Clear bits CL and BL
-  PORTD |=  (1 << AL);                    // Set bit AL
-  TCCR2A =  0;                            // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
-  TCCR1A =  (1 << WGM10 | 1 << COM1A1);   // Set PWM settings for TCCR1A
+  PORTD &= ~((1 << AH) | (1 << BH));      // Set AH CH to low
+  PORTD |= (1 << CH);                     // Set BH to high
+  TCCR1A =  0;                            // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
+  TCCR2A =  0x81;
 }
 
 void CH_BL(void) {
-  PORTD &= ~(1 << AL | 1 << BL);          // Clear bits AL and BL
-  PORTD |=  (1 << BL);                    // Set bit BL
-  TCCR2A =  0;                            // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
-  TCCR1A =  (1 << WGM10 | 1 << COM1A1);   // Set PWM settings for TCCR1A
+  PORTD &= ~((1 << AH) | (1 << BH));      // Set AH BH to low
+  PORTD |= (1 << CH);                     // Set CH to high
+  TCCR2A =  0;                            // Turn pin 10 (OC1B) PWM ON (pin 9 & pin 11 OFF)
+  TCCR1A =  0x21;
 }
 
 
