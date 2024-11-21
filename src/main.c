@@ -10,14 +10,21 @@
 #define DEBOUNCE 10                       // BEMF debounce count - default is 10 consecutive readings
 #define MAX_DELTA_RPS 100                 // Maximum acceptable delta RPS before restarting the motor
 
-// Define 3-half bridge pins
+// 3-half bridge high side pins
 #define AH PD5
 #define BH PD4
 #define CH PD3
 
+// 3-half bridge low side pins
 #define AL PB3
 #define BL PB2
 #define CL PB1
+
+// BEMF pins
+// Virtual ground -> AIN0 (PD6) Positive input of the comparator
+// BEMF_A -> AIN1 (PD7) Negative input of the comparator
+#define BEMF_B ADC0D
+#define BEMF_C ADC1D
 
 // PID controller constants
 #define Kp 0.2f                           // Proportional gain
@@ -230,6 +237,7 @@ void stop(void) {
   DDRB &= ~((1 << AH) | (1 << BH) | (1 << CH));
 }
 
+
 void BEMF_A_RISING(void) {
   ADCSRB = (0 << ACME);                   // Select AIN1 as comparator negative input
   ACSR |= (1 << ACIS1) | (1 << ACIS0);    // Set interrupt on rising edge
@@ -243,28 +251,28 @@ void BEMF_A_FALLING(void) {
 void BEMF_B_RISING(void) {
   ADCSRA = (0 << ADEN);                   // Disable the ADC module
   ADCSRB = (1 << ACME);
-  ADMUX = 2;                              // Select analog channel 2 as comparator negative input
+  ADMUX = BEMF_B;                         // Select analog channel BEMF_B as comparator negative input
   ACSR |= (1 << ACIS1) | (1 << ACIS0);    // Set interrupt on rising edge
 }
 
 void BEMF_B_FALLING(void) {
   ADCSRA = (0 << ADEN);                   // Disable the ADC module
   ADCSRB = (1 << ACME);
-  ADMUX = 2;                              // Select analog channel 2 as comparator negative input
+  ADMUX = BEMF_B;                         // Select analog channel BEMF_B as comparator negative input
   ACSR = (ACSR & ~(1 << ACIS0)) | (1 << ACIS1);   // Set interrupt on falling edge
 }
 
 void BEMF_C_RISING(void) {
   ADCSRA = (0 << ADEN);                   // Disable the ADC module
   ADCSRB = (1 << ACME);
-  ADMUX = 3;                              // Select analog channel 3 as comparator negative input
+  ADMUX = BEMF_C;                         // Select analog channel BEMF_C as comparator negative input
   ACSR |= (1 << ACIS1) | (1 << ACIS0);    // Set interrupt on rising edge
 }
 
 void BEMF_C_FALLING(void) {
   ADCSRA = (0 << ADEN);                   // Disable the ADC module
   ADCSRB = (1 << ACME);
-  ADMUX = 3;                              // Select analog channel 3 as comparator negative input
+  ADMUX = BEMF_C;                         // Select analog channel BEMF_C as comparator negative input
   ACSR = (ACSR & ~(1 << ACIS0)) | (1 << ACIS1);   // Set interrupt on falling edge
 }
 
