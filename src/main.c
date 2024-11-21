@@ -102,6 +102,8 @@ int main(void) {
       else if (!spinning && rps_target > 0) {
         start();
         spinning = 1;
+        millis_count = 0;
+        steps_count = 0;
       }
     }
 
@@ -122,11 +124,10 @@ int main(void) {
       }
     }
 
-    // If detect a suddent increase in RPS, restart the motor
+    // If detect a suddent increase in RPS, stop the motor
     if (delta_rps > MAX_DELTA_RPS && spinning) {
-      start();
-      millis_count = 0;
-      steps_count = 0;
+      stop();
+      spinning = 0;
       delta_rps = 0;
     }
   }
@@ -221,17 +222,22 @@ void update_duty_cycle(void) {
 void start(void) {
   ACSR &= ~(1 << ACIE);                   // Disable analog comparator interrupt
 
+  set_pwm(100);
+  CH_BL();
+  _delay_ms(200);
+
+  step = 0;
   duty_cycle = START_DUTY_CYCLE;
   set_pwm(duty_cycle);                    // Set the duty cycle
 
-  uint16_t delay_us = 10e3;
+  uint16_t delay_us = 2e3;
   while (delay_us > 100) {
+    bldc_move();
     uint16_t i = delay_us;
     while(i--) _delay_us(1);
-    bldc_move();
     step++;                               // Move to the next step
     step %= 6;
-    delay_us -= 20;                       // Reduce the delay
+    delay_us -= 20;                       // Reduce the delay    
   }
   ACSR |= (1 << ACIE);                    // Enable analog comparator interrupt
   rps_target = MIN_TARGET;                // Set the target speed
