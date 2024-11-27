@@ -8,7 +8,7 @@
 #define MIN_TARGET 60                     // Minimum target speed in RPS
 #define START_DUTY_CYCLE 100              // Duty cycle for open loop start
 #define ALLIGNMENT_DUTY_CYCLE 100         // Duty cycle for the rotor allignment step
-#define ALLIGNMENT_DURATION 200           // Duration of the rotor allignment step in ms
+#define ALLIGNMENT_DURATION 100           // Duration of the rotor allignment step in ms
 #define DEBOUNCE 10                       // BEMF debounce count - default is 10 consecutive readings
 #define MAX_DELTA_RPS 100                 // Maximum acceptable delta RPS before restarting the motor
 
