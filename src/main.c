@@ -253,7 +253,7 @@ void stop(void) {
   set_pwm(0);
   ACSR &= ~(1 << ACIE);                   // Disable analog comparator interrupt
 
-  // Set 3-half bridge pins to low
+  // Set 3-half bridge pins to LOW
   PORTB &= ~((1 << AL) | (1 << BL) | (1 << CL));
   PORTD &= ~((1 << AH) | (1 << BH) | (1 << CH));
 }
@@ -299,45 +299,45 @@ void BEMF_C_FALLING(void) {
 
 
 void AH_BL(void) {
-  PORTD &= ~((1 << BH) | (1 << CH));      // Set BH CH to low
+  PORTD &= ~((1 << BH) | (1 << CH));      // Set BH CH to LOW
   PORTD |= (1 << AH);                     // Set AH to high
-  TCCR2A = 0;                            // Turn pin 10 (OC1B) PWM ON (pin 9 & pin 11 OFF)
-  TCCR1A = 0x21;
+  TCCR2A = 0;                             // Set pin 11 to LOW
+  TCCR1A = (1 << COM1B1) | (1 << WGM10);  // Set PWM on pin 10 & pin 9 LOW
 }
 
 void AH_CL(void) {
-  PORTD &= ~((1 << BH) | (1 << CH));      // Set BH CH to low
+  PORTD &= ~((1 << BH) | (1 << CH));      // Set BH CH to LOW
   PORTD |= (1 << AH);                     // Set AH to high
-  TCCR2A = 0;                            // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
-  TCCR1A = 0x81;
+  TCCR2A = 0;                             // Set pin 11 to LOW
+  TCCR1A = (1 << COM1A1) | (1 << WGM10);  // Set PWM on pin 9 & pin 10 LOW
 }
 
 void BH_CL(void) {
-  PORTD &= ~((1 << AH) | (1 << CH));      // Set AH CH to low
+  PORTD &= ~((1 << AH) | (1 << CH));      // Set AH CH to LOW
   PORTD |= (1 << BH);                     // Set BH to high
-  TCCR2A = 0;                            // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
-  TCCR1A = 0x81;
+  TCCR2A = 0;                             // Set pin 11 to LOW
+  TCCR1A = (1 << COM1A1) | (1 << WGM10);  // Set PWM on pin 9 & pin 10 LOW
 }
 
 void BH_AL(void) {
-  PORTD &= ~((1 << AH) | (1 << CH));      // Set AH CH to low
+  PORTD &= ~((1 << AH) | (1 << CH));      // Set AH CH to LOW
   PORTD |= (1 << BH);                     // Set BH to high
-  TCCR1A = 0;                            // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
-  TCCR2A = 0x81;
+  TCCR1A = 0;                             // Set pins 9 & 10 to LOW
+  TCCR2A = (1 << COM2A1) | (1 << WGM20);  // Set PWM on pin 11  
 }
 
 void CH_AL(void) {
-  PORTD &= ~((1 << AH) | (1 << BH));      // Set AH CH to low
+  PORTD &= ~((1 << AH) | (1 << BH));      // Set AH CH to LOW
   PORTD |= (1 << CH);                     // Set BH to high
-  TCCR1A = 0;                            // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
-  TCCR2A = 0x81;
+  TCCR1A = 0;                             // Set pins 9 & 10 to LOW
+  TCCR2A = (1 << COM2A1) | (1 << WGM20);  // Set PWM on pin 11  
 }
 
 void CH_BL(void) {
-  PORTD &= ~((1 << AH) | (1 << BH));      // Set AH BH to low
+  PORTD &= ~((1 << AH) | (1 << BH));      // Set AH BH to LOW
   PORTD |= (1 << CH);                     // Set CH to high
-  TCCR2A = 0;                            // Turn pin 10 (OC1B) PWM ON (pin 9 & pin 11 OFF)
-  TCCR1A = 0x21;
+  TCCR2A = 0;                             // Set pin 11 to LOW
+  TCCR1A = (1 << COM1B1) | (1 << WGM10);  // Set PWM on pin 10 & pin 9 LOW
 }
 
 
