@@ -142,12 +142,10 @@ ISR(TIMER0_COMPA_vect) {
 }
 
 
-// TODO: Make is faster - move what can be moved to the main loop
 // Analog comparator ISR
-ISR (ANALOG_COMP_vect) {
-  // Debounce the BEMF signal
-  uint8_t move = 1;
-  for (int8_t i = 0; i < DEBOUNCE; i++) {
+ISR (ANALOG_COMP_vect) {                  // ISR time 7.5us (DEBOUNCE = 10)
+  uint8_t move = 1;                       // Debounce the BEMF signal
+  for (int8_t i = 0; i < DEBOUNCE; i++) { // Loop time (2 + 9 * DEBOUNCE) * cycle_time = 5.75us (DEBOUNCE = 10)
     if (step & 1) {
       if (!(ACSR & (1 << ACO))) {
         move = 0;
@@ -160,7 +158,7 @@ ISR (ANALOG_COMP_vect) {
       };
     }
   }
-  if (move) {
+  if (move) {                             // Loop time 28 * cycle_time = 1.75us
     bldc_move();
     step++;
     step %= 6;
