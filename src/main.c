@@ -345,7 +345,7 @@ void set_pwm(float duty){
   if (duty > 255) duty = 255;
   if (duty < 0) duty = 0;
   duty += 0.5;
-  OCR1A = (uint8_t)duty;                   // Set pin 9  PWM duty cycle
-  OCR1B = (uint8_t)duty;                   // Set pin 10 PWM duty cycle
-  OCR2A = (uint8_t)duty;                   // Set pin 11 PWM duty cycle
+  OCR1A = (uint8_t)duty;                  // Set pin 9  PWM duty cycle
+  OCR1B = (uint8_t)duty;                  // Set pin 10 PWM duty cycle
+  OCR2A = (uint8_t)duty;                  // Set pin 11 PWM duty cycle
 }
