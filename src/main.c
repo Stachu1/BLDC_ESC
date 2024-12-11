@@ -7,8 +7,8 @@
 
 #define MIN_TARGET 60                     // Minimum target speed in RPS
 #define START_DUTY_CYCLE 100              // Duty cycle for open loop start
-#define ALLIGNMENT_DUTY_CYCLE 100         // Duty cycle for the rotor allignment step
-#define ALLIGNMENT_DURATION 300           // Duration of the rotor allignment step in ms
+#define ALLIGNMENT_DUTY_CYCLE 120         // Duty cycle for the rotor allignment step
+#define ALLIGNMENT_DURATION 200           // Duration of the rotor allignment step in ms
 #define DEBOUNCE 10                       // BEMF debounce count - default is 10 consecutive readings
 #define MAX_DELTA_RPS 100                 // Maximum acceptable delta RPS before restarting the motor
 
@@ -48,6 +48,7 @@ void bldc_move(void);
 void update_duty_cycle(void);
 void start(void);
 void stop(void);
+void regen(void);
 
 void BEMF_A_RISING(void);
 void BEMF_A_FALLING(void);
@@ -102,11 +103,19 @@ int main(void) {
       }
 
       // Start the motor if the target speed is greater than 0
-      else if (!spinning && rps_target > 0) {
+      else if (!spinning && (rps_target > 0 && rps_target != 0xFFFF)) {
         start();
         spinning = 1;
         millis_count = 0;
         steps_count = 0;
+      }
+
+      else if (rps_target == 0xFFFF) {
+        stop();
+        spinning = 0;
+        regen();
+        printf("Regenarative breaking enabled\n");
+        _delay_ms(1000);
       }
     }
 
@@ -137,6 +146,14 @@ int main(void) {
 }
 
 
+// Enable regenarative breaking
+void regen(void) {
+  TCCR2A = (1 << WGM20) | (1 << 7);             // Set PWM mode on pin 11
+  TCCR1A = (1 << WGM10) | (1 << 7) | (1 << 5);  // Set PWM mode on pin 9 & pin 10
+  set_pwm(128);
+}
+
+
 // Timer0 ISR - triggers every 1ms
 ISR(TIMER0_COMPA_vect) {
   millis_count++;
@@ -144,7 +161,7 @@ ISR(TIMER0_COMPA_vect) {
 
 
 // Analog comparator ISR
-ISR (ANALOG_COMP_vect) {                  // ISR time 7.5us (DEBOUNCE = 10)
+ISR(ANALOG_COMP_vect) {                   // ISR time 7.5us (DEBOUNCE = 10)
   uint8_t move = 1;                       // Debounce the BEMF signal
   for (int8_t i = 0; i < DEBOUNCE; i++) { // Loop time (2 + 9 * DEBOUNCE) * cycle_time = 5.75us (DEBOUNCE = 10)
     if (step & 1) {
@@ -176,11 +193,18 @@ int8_t update_speed_target(void) {
   if (UCSR0A & (1 << RXC0)) {             // Check if data is available in the UART buffer
     char c = uart_getchar(NULL);
     if (c == '\n') {
-      buff[index] = '\0';                 // Null-terminate the string
-      rps_target = (uint16_t)atoi(buff);  // Convert string to uint16_t
-      index = 0;                          // Reset buff index
+      if (buff[0] == 'r') {
+        rps_target = 0xFFFF;
+        index = 0;
+      }
+      else {
+        buff[index] = '\0';                 // Null-terminate the string
+        rps_target = (uint16_t)atoi(buff);  // Convert string to uint16_t
+        index = 0;                          // Reset buff index
+      }
       return 1;                           // rps_target updated
-    } else if (index < sizeof(buff) - 1) {
+    }
+    else if (index < sizeof(buff) - 1) {
       buff[index] = c;                    // Add character to buff
       index++;                            // Increment buff index
     }
