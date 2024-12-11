@@ -8,7 +8,7 @@
 #define MIN_TARGET 60                     // Minimum target speed in RPS
 #define START_DUTY_CYCLE 100              // Duty cycle for open loop start
 #define ALLIGNMENT_DUTY_CYCLE 100         // Duty cycle for the rotor allignment step
-#define ALLIGNMENT_DURATION 100           // Duration of the rotor allignment step in ms
+#define ALLIGNMENT_DURATION 300           // Duration of the rotor allignment step in ms
 #define DEBOUNCE 10                       // BEMF debounce count - default is 10 consecutive readings
 #define MAX_DELTA_RPS 100                 // Maximum acceptable delta RPS before restarting the motor
 
@@ -30,6 +30,7 @@
 
 // PID controller constants
 #define Kp 0.2f                           // Proportional gain
+#define Ki 0.0f                          // Integral gain
 #define Kd 0.5f                           // Derivative gain
 
 
@@ -201,21 +202,24 @@ void bldc_move(void) {
 }
 
 
-// TODO: Make an actuall PID controller
 // PID controller to update the duty cycle 
 void update_duty_cycle(void) {
   static float previous_error = 0;
+  static float integral = 0;
 
   float error = (float)rps_target - rps;
 
   float Pout = Kp * error;
+
+  integral += error;
+  float Iout = Ki * integral;
 
   float derivative = error - previous_error;
   float Dout = Kd * derivative;
 
   previous_error = error;
 
-  float pid_output = Pout + Dout;
+  float pid_output = Pout + Iout + Dout;
   duty_cycle += pid_output;
 }
 
