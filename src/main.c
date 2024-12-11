@@ -11,6 +11,7 @@
 #define ALLIGNMENT_DURATION 200           // Duration of the rotor allignment step in ms
 #define DEBOUNCE 10                       // BEMF debounce count - default is 10 consecutive readings
 #define MAX_DELTA_RPS 100                 // Maximum acceptable delta RPS before restarting the motor
+#define REGEN_DUTY_CYCLE 192              // Duty cycle for regenarative breaking
 
 // 3-half bridge high side pins
 #define AH PD5
@@ -115,7 +116,6 @@ int main(void) {
         spinning = 0;
         regen();
         printf("Regenarative breaking enabled\n");
-        _delay_ms(1000);
       }
     }
 
@@ -150,7 +150,7 @@ int main(void) {
 void regen(void) {
   TCCR2A = (1 << WGM20) | (1 << 7);             // Set PWM mode on pin 11
   TCCR1A = (1 << WGM10) | (1 << 7) | (1 << 5);  // Set PWM mode on pin 9 & pin 10
-  set_pwm(128);
+  set_pwm(REGEN_DUTY_CYCLE);
 }
 
 
