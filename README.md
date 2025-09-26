@@ -9,6 +9,9 @@ This firmware implements a **sensorless BLDC (Brushless DC) motor controller** f
 - UART-based runtime speed control
 - Basic PID-based speed regulation
 
+<img width="1200" height="900" alt="image" src="https://github.com/user-attachments/assets/4a3c6d8c-e2b6-4244-8b7b-9a47122f9b01" />
+
+
 ---
 
 ## 🛠 Features
